@@ -9,10 +9,19 @@ import Leaderboard from './components/Leaderboard';
 import UserProfile from './components/UserProfile';
 import OnboardingModal from './components/OnboardingModal';
 import AuthModal from './components/AuthModal';
-import { Trophy, Zap, Map as MapIcon, Users, Menu, UserCircle, Globe, Plane, Share2, Lock, Unlock, Hammer, AlertTriangle, LogOut, LogIn } from 'lucide-react';
+import { Trophy, Zap, Map as MapIcon, Users, Menu, UserCircle, Globe, Plane, Share2, Lock, Unlock, Hammer, AlertTriangle, LogOut, LogIn, Key, ShieldCheck, Medal, DoorOpen, X, Building2, ArrowUp } from 'lucide-react';
 import { supabase } from './lib/supabaseClient';
 
 const GRID_SIZE = 6;
+
+export interface WorldNotification {
+  id: string;
+  lotIndex: number;
+  message: string;
+  type: 'CONQUER' | 'RECLAIM' | 'BUILD' | 'USURPED';
+  playerName: string;
+  timestamp: number;
+}
 
 const MOCK_COMPANIES = ['CyberConstruct', 'TerraForm', 'NeoBuild', 'SkyHigh'];
 const MOCK_RIVALS = [
@@ -24,12 +33,12 @@ const MOCK_RIVALS = [
 const DISTRICTS: District[] = [
   { id: 'd1', name: 'Neon Quarter', color: '#f472b6', rows: [0, 1, 2], cols: [0, 1, 2] },
   { id: 'd2', name: 'Cyber Hills', color: '#60a5fa', rows: [0, 1, 2], cols: [3, 4, 5] },
-  { id: 'd3', name: 'Industrial Zone', color: '#a3e635', rows: [3, 4, 5], cols: [0, 1, 2] },
-  { id: 'd4', name: 'The Core', color: '#c084fc', rows: [3, 4, 5], cols: [3, 4, 5] },
+  { id: 'd3', name: 'The Grid', color: '#10b981', rows: [3, 4, 5], cols: [0, 1, 2] },
+  { id: 'd4', name: 'Azure Bay', color: '#8b5cf6', rows: [3, 4, 5], cols: [3, 4, 5] },
 ];
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_build', title: 'First Brick', description: 'Build your first tower', icon: '🧱', unlocked: false },
+  { id: 'first_build', title: 'Pioneer', description: 'Build your first tower', icon: '🏗️', unlocked: false },
   { id: 'conqueror', title: 'Conqueror', description: 'Take over a rival building', icon: '⚔️', unlocked: false },
   { id: 'sky_high', title: 'Sky High', description: 'Reach 30 floors', icon: '☁️', unlocked: false },
   { id: 'district_lord', title: 'District Lord', description: 'Own 3 buildings in one district', icon: '👑', unlocked: false },
@@ -50,84 +59,106 @@ const PlateSelectionModal = ({
   onPurchase: (plate: PlateType, cost: number) => void
 }) => {
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95 duration-200">
-      <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
           <div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-2">
-              <Hammer className="text-yellow-500" /> Foundation Permit
-            </h2>
-            <p className="text-slate-400 text-sm">Select a base plate for your new tower.</p>
+            <h2 className="text-xl font-black text-white uppercase tracking-tight">Foundation selection</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select your structural base</p>
           </div>
-          <div className="text-right">
-            <div className="text-xs font-bold text-slate-500 uppercase">Available Credits</div>
-            <div className="text-2xl font-mono font-bold text-yellow-400">{credits}</div>
+          <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/5">
+            <Zap className="text-yellow-400" size={14} fill="currentColor" />
+            <span className="text-sm font-mono font-bold text-yellow-500">{credits.toLocaleString()} CR</span>
           </div>
         </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 overflow-y-auto">
-          {(Object.values(PLATE_STATS) as any[]).map((plate) => {
-            const isUnlocked = user.unlockedPlates.includes(plate.id);
-            const canAfford = credits >= plate.cost;
+        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+          {(Object.keys(PLATE_STATS) as PlateType[]).map(id => {
+            const config = PLATE_STATS[id];
+            const isUnlocked = user.unlockedPlates.includes(id);
 
             return (
               <div
-                key={plate.id}
-                className={`relative flex flex-col p-4 rounded-xl border-2 transition-all duration-300 group
-                                    ${isUnlocked
-                    ? 'bg-slate-800 border-slate-600 hover:border-white cursor-pointer'
-                    : 'bg-slate-900 border-slate-800 opacity-80'
-                  }`}
-                onClick={() => isUnlocked && onSelect(plate.id)}
+                key={id}
+                className={`group relative p-4 rounded-2xl border-2 transition-all duration-300 flex items-center gap-4
+                  ${isUnlocked
+                    ? 'bg-slate-800/40 border-slate-700/50 hover:border-indigo-500/50 cursor-pointer'
+                    : 'bg-slate-950/40 border-slate-800/50 opacity-80'}`}
+                onClick={() => isUnlocked && onSelect(id)}
               >
-                <div className="absolute top-2 right-2">
-                  {isUnlocked ? <Unlock size={14} className="text-green-500" /> : <Lock size={14} className="text-slate-600" />}
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+                  style={{ backgroundColor: config.color }}
+                >
+                  <Building2 className="text-white" size={24} />
                 </div>
 
-                <div className="flex-1 flex flex-col items-center text-center mt-2">
-                  <div className="w-12 h-12 rounded-lg mb-3 shadow-lg flex items-center justify-center font-black text-lg text-slate-900" style={{ backgroundColor: plate.color }}>
-                    {plate.id}
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <h3 className="text-sm font-black text-white uppercase">{config.name}</h3>
+                    {isUnlocked ? (
+                      <div className="text-[8px] font-black bg-indigo-500 text-white px-1.5 py-0.5 rounded uppercase">Licensed</div>
+                    ) : (
+                      <div className="text-[10px] font-bold text-yellow-500 font-mono">{config.cost.toLocaleString()} CR</div>
+                    )}
                   </div>
-                  <h3 className="font-bold text-white mb-1">{plate.name}</h3>
-                  <div className="text-xs text-slate-400 mb-4">{plate.description}</div>
-
-                  <div className="mt-auto w-full space-y-2">
-                    <div className="bg-black/40 rounded px-2 py-1 text-xs font-mono text-slate-300">
-                      Max Height: <span className="text-white font-bold">{plate.maxHeight}</span>
-                    </div>
-
-                    {!isUnlocked && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); if (canAfford) onPurchase(plate.id, plate.cost); }}
-                        disabled={!canAfford}
-                        className={`w-full py-2 rounded font-bold text-xs uppercase flex items-center justify-center gap-1
-                                                    ${canAfford
-                            ? 'bg-yellow-500 text-black hover:bg-yellow-400 shadow-lg shadow-yellow-500/20'
-                            : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-                      >
-                        {canAfford ? 'Buy' : 'Locked'}
-                        <span className="font-mono">{plate.cost}</span>
-                      </button>
-                    )}
-                    {isUnlocked && (
-                      <div className="w-full py-2 bg-green-500/10 text-green-500 border border-green-500/20 rounded font-bold text-xs uppercase text-center group-hover:bg-green-500 group-hover:text-black transition">
-                        Select
-                      </div>
-                    )}
+                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{config.description}</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                      <ArrowUp size={10} /> Max Height: {config.maxHeight === 9999 ? '∞' : config.maxHeight}
+                    </span>
                   </div>
                 </div>
+
+                {!isUnlocked && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPurchase(id, config.cost); }}
+                    disabled={credits < config.cost}
+                    className={`ml-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all
+                      ${credits >= config.cost
+                        ? 'bg-yellow-500 text-slate-900 hover:scale-105 active:scale-95'
+                        : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}
+                  >
+                    Buy License
+                  </button>
+                )}
               </div>
-            )
+            );
           })}
-        </div>
-
-        <div className="p-4 border-t border-slate-800 bg-slate-800/50 flex justify-end">
-          <button onClick={onClose} className="px-6 py-2 rounded-lg text-slate-400 hover:text-white font-bold transition">Cancel</button>
         </div>
       </div>
     </div>
   );
-}
+};
+
+const AchievementsModal = ({ achievements, onClose }: { achievements: Achievement[], onClose: () => void }) => {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+          <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+            <Medal className="text-yellow-500" /> Career Milestones
+          </h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {achievements.map(ach => (
+            <div key={ach.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${ach.unlocked ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-slate-800/30 border-slate-800'}`}>
+              <div className={`text-3xl ${ach.unlocked ? '' : 'grayscale opacity-30 blur-[1px]'}`}>{ach.icon}</div>
+              <div>
+                <h3 className={`text-sm font-bold ${ach.unlocked ? 'text-white' : 'text-slate-500'}`}>{ach.title}</h3>
+                <p className="text-[10px] text-slate-400">{ach.description}</p>
+              </div>
+              {ach.unlocked && <div className="ml-auto text-indigo-400"><Trophy size={16} /></div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [view, setView] = useState<ViewState>(ViewState.CITY);
@@ -140,7 +171,7 @@ export default function App() {
   const [credits, setCredits] = useState<number>(1000);
   const [achievements, setAchievements] = useState<Achievement[]>(INITIAL_ACHIEVEMENTS);
   const [showPlateSelection, setShowPlateSelection] = useState(false);
-  const [onlineCount, setOnlineCount] = useState<number>(0);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
   const [cityCounts, setCityCounts] = useState<{ A: number, B: number }>({ A: 0, B: 0 });
 
   // New State for City Theme
@@ -150,6 +181,8 @@ export default function App() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(false);
   const [focusedLotIndex, setFocusedLotIndex] = useState<number | null>(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -157,6 +190,7 @@ export default function App() {
   const [cityFull, setCityFull] = useState(false);
 
   const [notification, setNotification] = useState<string | null>(null);
+  const [worldNotifications, setWorldNotifications] = useState<WorldNotification[]>([]);
 
   // Initialize User
   useEffect(() => {
@@ -167,18 +201,8 @@ export default function App() {
       if (!parsedUser.logoId) parsedUser.logoId = 'zap';
       setUser(parsedUser);
     } else {
-      // No user found, trigger onboarding
       setShowOnboarding(true);
     }
-
-    // Simulate City Capacity Check
-    const checkCityCapacity = () => {
-      // Mock: 10% chance city is full for demo, or based on some persistent flag
-      // In real backend, we'd query Supabase: count(players) where city_id = current
-      const isFull = Math.random() > 0.9;
-      if (isFull) setCityFull(true);
-    };
-    checkCityCapacity();
 
     const savedAch = localStorage.getItem('stack_city_achievements');
     if (savedAch) setAchievements(JSON.parse(savedAch));
@@ -188,6 +212,19 @@ export default function App() {
 
     initializeCity();
   }, []);
+
+  // Sync state to local storage
+  useEffect(() => {
+    if (user) localStorage.setItem('stack_city_user', JSON.stringify(user));
+  }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem('stack_city_achievements', JSON.stringify(achievements));
+  }, [achievements]);
+
+  useEffect(() => {
+    localStorage.setItem('stack_city_credits', credits.toString());
+  }, [credits]);
 
   // Handle URL Challenge Params
   useEffect(() => {
@@ -209,7 +246,7 @@ export default function App() {
           id: `challenge_${Date.now()}`,
           lotIndex: index,
           score: score,
-          height: Math.floor(score / 10), // Approx
+          height: Math.floor(score / 10),
           blocks: Array.from({ length: Math.floor(score / 10) }).map((_, i) => ({
             position: [0, i * 0.6, 0],
             size: [4.5, 0.6, 4.5],
@@ -253,18 +290,21 @@ export default function App() {
     const channel = supabase
       .channel('public:buildings')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'buildings' }, (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const newBuilding = payload.new as any; // Type assertion needed for raw DB response
+        const currentCityId = cityTheme === 'CYBER' ? 'A' : 'B';
 
-          // Transform snake_case DB to camelCase UI
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const newBuilding = payload.new as any;
+
+          if (newBuilding.city_id !== currentCityId) return;
+
           const transformedBuilding: Building = {
             id: newBuilding.id,
             lotIndex: newBuilding.lot_index,
             score: newBuilding.score,
             height: newBuilding.height,
-            blocks: newBuilding.blocks, // JSONB comes back as object
+            blocks: newBuilding.blocks,
             baseStatus: newBuilding.base_status as 'PERFECT' | 'PRE_BUILT',
-            timestamp: newBuilding.timestamp, // Assuming stored as BIGINT/Number
+            timestamp: newBuilding.timestamp,
             validForLeaderboard: newBuilding.valid_for_leaderboard,
             ownerId: newBuilding.owner_id,
             ownerName: newBuilding.owner_name,
@@ -272,11 +312,55 @@ export default function App() {
             ownerColor: newBuilding.owner_color,
             history: newBuilding.history || [],
             districtId: cityLayout.find(l => l.index === newBuilding.lot_index)?.districtId || 'd1',
-            plateType: newBuilding.plate_type as PlateType || 'N1'
+            plateType: newBuilding.plate_type as PlateType || 'N1',
+            customName: newBuilding.custom_name
           };
 
           setBuildings(prev => {
             const filtered = prev.filter(b => b.lotIndex !== transformedBuilding.lotIndex);
+
+            // CHECK FOR USURPATION (Local user specific)
+            const wasOwner = prev.find(b => b.lotIndex === transformedBuilding.lotIndex)?.ownerId === user?.id;
+            const isOwnerNow = transformedBuilding.ownerId === user?.id;
+
+            if (wasOwner && !isOwnerNow) {
+              showNotification(`⚠️ USURPED! ${transformedBuilding.ownerName} took Lot #${transformedBuilding.lotIndex}!`);
+            } else if (!wasOwner && isOwnerNow) {
+              showNotification(`🏢 Lot #${transformedBuilding.lotIndex} is now yours!`);
+            }
+
+            // WORLD EVENT NOTIFICATION
+            const oldBuilding = prev.find(b => b.lotIndex === transformedBuilding.lotIndex);
+            if (oldBuilding && oldBuilding.ownerId !== transformedBuilding.ownerId) {
+              const type = transformedBuilding.history[0]?.action === 'RECLAIMED' ? 'RECLAIM' : 'CONQUER';
+              const worldEvent: WorldNotification = {
+                id: `world_ev_${Date.now()}_${transformedBuilding.lotIndex}`,
+                lotIndex: transformedBuilding.lotIndex,
+                message: type === 'RECLAIM' ? "claimed back their property!" : "has conquered this lot!",
+                playerName: transformedBuilding.ownerName,
+                type: type as any,
+                timestamp: Date.now()
+              };
+              setWorldNotifications(w => [...w, worldEvent]);
+
+              setTimeout(() => {
+                setWorldNotifications(current => current.filter(n => n.id !== worldEvent.id));
+              }, 8000);
+            } else if (!oldBuilding) {
+              const buildEvent: WorldNotification = {
+                id: `world_ev_${Date.now()}_${transformedBuilding.lotIndex}`,
+                lotIndex: transformedBuilding.lotIndex,
+                message: "started a new construction!",
+                playerName: transformedBuilding.ownerName,
+                type: 'BUILD',
+                timestamp: Date.now()
+              };
+              setWorldNotifications(w => [...w, buildEvent]);
+              setTimeout(() => {
+                setWorldNotifications(current => current.filter(n => n.id !== buildEvent.id));
+              }, 8000);
+            }
+
             return [...filtered, transformedBuilding];
           });
         }
@@ -286,94 +370,76 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [cityLayout]);
+  }, [cityLayout, cityTheme, user]);
 
   // Fetch Online Counts
   useEffect(() => {
     const fetchCounts = async () => {
-      // Total Online (simulated 'active' in last 10 mins)
-      const { count: total } = await supabase.from('players').select('*', { count: 'exact', head: true }).gt('last_seen', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { count: total } = await supabase
+        .from('players')
+        .select('*', { count: 'exact', head: true })
+        .gt('last_seen', fiveMinsAgo);
+
       if (total !== null) setOnlineCount(total);
 
-      // City specific counts (approximation based on current buildings or just random/distributed for now if players table doesn't track current_city properly yet. 
-      // We didn't add 'current_city' to players table in SQL, we only have 'buildings'. 
-      // Let's infer from buildings ownership or just mock the distribution for the UI requirement or add the column. 
-      // For speed, let's just split the total randomly or query unique owners of buildings in city A/B.
-      // Better: Let's just update `last_seen` to include `current_city` metadata next time. 
-      // For now, let's mock the split of the Real Total:
-      if (total !== null) {
-        const aCount = Math.floor(total * 0.6); // Fake distribution
-        setCityCounts({ A: aCount, B: total - aCount });
+      const { data: cityData } = await supabase
+        .from('players')
+        .select('current_city')
+        .gt('last_seen', fiveMinsAgo);
+
+      if (cityData) {
+        const counts = cityData.reduce((acc: any, p: any) => {
+          if (p.current_city === 'A') acc.A++;
+          if (p.current_city === 'B') acc.B++;
+          return acc;
+        }, { A: 0, B: 0 });
+        setCityCounts(counts);
+
+        const currentSector = cityTheme === 'CYBER' ? 'A' : 'B';
+        setCityFull(counts[currentSector] >= 6);
       }
     };
+
     fetchCounts();
-    const interval = setInterval(fetchCounts, 15000);
+    const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [cityTheme]);
 
+  // Initialization & Data Loading
   const initializeCity = async () => {
-    // 1. Layout (Static for now, keep local or fetch if dynamic)
-    const savedLayout = localStorage.getItem('stack_city_layout');
-    let layout: LotData[] = [];
+    const layout: LotData[] = [];
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const layoutIdx = r * GRID_SIZE + c;
+        const districtId = DISTRICTS.find(d => d.rows.includes(r) && d.cols.includes(c))?.id || 'd1';
 
-    // ... [Reuse existing Layout Generation Logic - it's fine local for now as it's deterministic seeded] ...
-    if (savedLayout) {
-      layout = JSON.parse(savedLayout);
-      if (!layout.some(l => l.type === 'COMMERCIAL' || l.type === 'CIVIC')) layout = [];
-    }
+        let type: LotType = 'EMPTY';
+        let variant: DecorVariant | undefined;
 
-    if (layout.length === 0) {
-      // ... [EXISTING LAYOUT GEN CODE] ...
-      // Re-implementing simplified layout gen to ensure context isn't lost if I cut it
-      let hasHospital = false;
-      let hasSchool = false;
-      let hasTownHall = false;
+        if (layoutIdx === 14) { type = 'CIVIC'; variant = 'TOWN_HALL'; }
+        else if (layoutIdx === 2) { type = 'COMMERCIAL'; variant = 'SHOP_LARGE'; }
+        else if (layoutIdx === 33) { type = 'PARK'; }
+        else if (layoutIdx === 18) { type = 'CIVIC'; variant = 'HOSPITAL'; }
+        else if (layoutIdx === 5 || layoutIdx === 20 || layoutIdx === 25) { type = 'PRE_BUILT_BASE'; }
 
-      for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-        const row = Math.floor(i / GRID_SIZE);
-        const col = i % GRID_SIZE;
-        const district = DISTRICTS.find(d => d.rows.includes(row) && d.cols.includes(col))!;
-
-        const rand = Math.random();
-        let type: LotType = 'PRE_BUILT_BASE';
-        let variant: DecorVariant | undefined = undefined;
-
-        if (rand < 0.15) { type = 'PARK'; }
-        else if (rand < 0.30) {
-          type = 'COMMERCIAL';
-          variant = Math.random() > 0.5 ? 'SHOP_SMALL' : 'SHOP_LARGE';
-        } else if (rand < 0.40) {
-          type = 'CIVIC';
-          const civicRoll = Math.random();
-          if (!hasHospital && civicRoll < 0.33) { variant = 'HOSPITAL'; hasHospital = true; }
-          else if (!hasSchool && civicRoll < 0.66) { variant = 'SCHOOL'; hasSchool = true; }
-          else if (!hasTownHall) { variant = 'TOWN_HALL'; hasTownHall = true; }
-          else { variant = 'HOSPITAL'; }
-        } else { type = 'PRE_BUILT_BASE'; }
-
-        if (i === 0) type = 'PRE_BUILT_BASE';
-        layout.push({ index: i, type, variant, x: col, z: row, districtId: district.id });
+        layout.push({ index: layoutIdx, type, variant, x: c, z: r, districtId });
       }
-      localStorage.setItem('stack_city_layout', JSON.stringify(layout));
     }
     setCityLayout(layout);
 
-    // 2. Fetch Buildings from Supabase
-    const { data: dbBuildings, error } = await supabase
+    const { data, error } = await supabase
       .from('buildings')
       .select('*')
       .eq('city_id', cityTheme === 'CYBER' ? 'A' : 'B');
 
     if (error) {
-      console.error("Error loading city:", error);
-      showNotification("Connection lost. Loading offline backup...");
+      console.error("Fetch buildings failed:", error);
+      return;
     }
 
-    if (dbBuildings && dbBuildings.length > 0) {
-      const parsedBuildings: Building[] = dbBuildings.map(b => ({
+    if (data) {
+      const transformed = data.map((b: any) => ({
         id: b.id,
         lotIndex: b.lot_index,
         score: b.score,
@@ -388,64 +454,38 @@ export default function App() {
         ownerColor: b.owner_color,
         history: b.history || [],
         districtId: layout.find(l => l.index === b.lot_index)?.districtId || 'd1',
-        plateType: b.plate_type as PlateType || 'N1'
+        plateType: b.plate_type as PlateType || 'N1',
+        customName: b.custom_name
       }));
-      setBuildings(parsedBuildings);
-    } else {
-      // Only if DB is empty, init some mocks (or just leave empty)
-      setBuildings([]);
+      setBuildings(transformed);
     }
   };
-
-  // Sync user to Supabase on update
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('stack_city_user', JSON.stringify(user));
-
-      // Upsert player profile to DB
-      supabase.from('players').upsert({
-        id: user.id,
-        name: user.name,
-        company: user.company,
-        color: user.color,
-        logo_id: user.logoId,
-        unlocked_plates: user.unlockedPlates,
-        last_seen: new Date().toISOString()
-      }).then(({ error }) => {
-        if (error) console.error("Sync error:", error);
-      });
-    }
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem('stack_city_credits', credits.toString());
-  }, [credits]);
-
-  useEffect(() => {
-    localStorage.setItem('stack_city_achievements', JSON.stringify(achievements));
-  }, [achievements]);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 4000);
+    if (window.navigator?.vibrate) window.navigator.vibrate(50);
   };
 
   const unlockAchievement = (id: string) => {
-    const ach = achievements.find(a => a.id === id);
-    if (ach && !ach.unlocked) {
-      const newAch = achievements.map(a => a.id === id ? { ...a, unlocked: true } : a);
-      setAchievements(newAch);
-      showNotification(`🏆 Achievement Unlocked: ${ach.title}`);
-    }
+    setAchievements(prev => {
+      const idx = prev.findIndex(a => a.id === id);
+      if (idx !== -1 && !prev[idx].unlocked) {
+        const newArr = [...prev];
+        newArr[idx] = { ...newArr[idx], unlocked: true };
+        showNotification(`🏆 Achievement Unlocked: ${newArr[idx].title}`);
+        return newArr;
+      }
+      return prev;
+    });
   };
 
   const handleLotSelect = (index: number) => {
     const existing = buildings.find(b => b.lotIndex === index);
     const lotDef = cityLayout.find(l => l.index === index);
 
-    // Only allow selection of playable lots
     if (lotDef && (lotDef.type === 'PARK' || lotDef.type === 'CIVIC' || lotDef.type === 'COMMERCIAL')) {
-      return; // Decoration only
+      return;
     }
 
     if (existing) {
@@ -476,20 +516,24 @@ export default function App() {
     if (!user) return;
 
     const existing = buildings.find(b => b.lotIndex === result.lotIndex);
-    const isConquest = existing && existing.ownerId !== user.id && result.score > existing.score;
+    const isTakeBack = existing && existing.history.some(h => h.playerId === user.id) && existing.ownerId !== user.id;
     const isNewRecord = !existing || result.score > existing.score;
+    const canClaim = isNewRecord || isTakeBack;
 
-    if (isNewRecord) {
+    if (canClaim) {
+      const action = existing
+        ? (existing.ownerId !== user.id ? (isTakeBack ? 'RECLAIMED' : 'CONQUERED') : 'DEFENDED')
+        : 'BUILT';
+
       const newHistoryEntry: BuildingHistory = {
         playerId: user.id,
         playerName: user.name,
         score: result.score,
         timestamp: Date.now(),
-        action: existing ? (existing.ownerId !== user.id ? 'CONQUERED' : 'DEFENDED') : 'BUILT'
+        action: action
       };
 
       const prevHistory = existing ? existing.history : [];
-
       const newBuildingData: Building = {
         ...result,
         ownerId: user.id,
@@ -498,7 +542,7 @@ export default function App() {
         ownerColor: user.color,
         districtId: cityLayout.find(l => l.index === result.lotIndex)?.districtId || 'd1',
         history: [newHistoryEntry, ...prevHistory],
-        plateType: selectedPlate // Save the plate type used
+        plateType: selectedPlate
       };
 
       setBuildings(prev => {
@@ -506,17 +550,7 @@ export default function App() {
         return [...filtered, newBuildingData];
       });
 
-      // Save to Supabase
       supabase.from('buildings').upsert({
-        // We can use a composite key or just an ID. For simplicity, let's query first or assume ID if exists.
-        // BUT, to handle "Conquest", we should ideally reference the LOT INDEX + CITY ID as unique, or just insert new record.
-        // Let's rely on lot_index being unique per city in our logic, so we find and update.
-        // Actually, 'id' is UUID. If we are conquering, we are overwriting the lot.
-        // Strategy: Delete old building on this lot, Insert new one? Or Update?
-        // Simplest: store 'lot_index' and 'city_id' as unique constraint, but we didn't set that up yet.
-        // Upsert by ID if we tracked it? No, result doesn't have ID.
-        // Let's just DELETE any existing building on this lot and INSERT the new one.
-
         lot_index: result.lotIndex,
         city_id: cityTheme === 'CYBER' ? 'A' : 'B',
         owner_id: user.id,
@@ -531,16 +565,14 @@ export default function App() {
         history: [newHistoryEntry, ...prevHistory],
         timestamp: Date.now(),
         valid_for_leaderboard: true
-      }).then(res => {
+      }, { onConflict: 'lot_index, city_id' }).then(res => {
         if (res.error) console.error("Save failed:", res.error);
-        else showNotification("Progress Saved to Cloud!");
+        else showNotification(isTakeBack && !isNewRecord ? "Property Reclaimed!" : "Progress Saved to Cloud!");
       });
 
       unlockAchievement('first_build');
       if (result.height >= 30) unlockAchievement('sky_high');
-      if (isConquest) {
-        unlockAchievement('conqueror');
-      }
+      if (action === 'CONQUERED' || action === 'RECLAIMED') unlockAchievement('conqueror');
 
       const myBuildingsInDistrict = buildings.filter(b =>
         b.districtId === newBuildingData.districtId && b.ownerId === user.id
@@ -559,13 +591,14 @@ export default function App() {
     if (selectedBuilding) {
       setSelectedLot(selectedBuilding.lotIndex);
       setSelectedBuilding(null);
-      setShowPlateSelection(true); // Always show selection for replay too
-      setView(ViewState.CITY); // Wait for modal
+      setShowPlateSelection(true);
+      setView(ViewState.CITY);
     }
   };
 
   const handleFocusBuilding = (lotIndex: number) => {
     setFocusedLotIndex(lotIndex);
+    setShowSidebar(false);
   };
 
   const toggleCityTheme = () => {
@@ -587,7 +620,7 @@ export default function App() {
     url.searchParams.set('lot', bestBuilding.lotIndex.toString());
     url.searchParams.set('score', bestBuilding.score.toString());
     url.searchParams.set('challenger', user.name);
-    url.searchParams.set('color', user.color.replace('#', '')); // avoid hash issues
+    url.searchParams.set('color', user.color.replace('#', ''));
 
     navigator.clipboard.writeText(url.toString());
     showNotification("Challenge Link Copied! Send it to a friend.");
@@ -595,121 +628,164 @@ export default function App() {
 
   const handleOnboardingComplete = (newPlayer: Player) => {
     setUser(newPlayer);
-    localStorage.setItem('stack_city_user', JSON.stringify(newPlayer));
     setShowOnboarding(false);
-    showNotification("Welcome to Stack City, CEO!");
+    supabase.from('players').upsert({
+      id: newPlayer.id,
+      name: newPlayer.name,
+      company: newPlayer.company,
+      color: newPlayer.color,
+      logo_id: newPlayer.logoId,
+      last_seen: new Date().toISOString()
+    });
   };
 
   const handleTravelCity = () => {
-    setCityFull(false);
     toggleCityTheme();
-    showNotification("Traveled to new city sector!");
+    showNotification(`Traveling to ${cityTheme === 'CYBER' ? 'Sunnyside' : 'Cyber City'}...`);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('stack_city_user');
+  const handleLogout = () => {
+    supabase.auth.signOut();
     setUser(null);
-    setShowOnboarding(true);  // Back to start
-    setShowSidebar(false);
-    showNotification("Logged out successfully.");
+    localStorage.removeItem('stack_city_user');
+    showNotification("Logged Out Successfully");
   };
 
-  const handleAuthenticated = (player: Player) => {
+  const handleAuthenticated = async (player: Player) => {
     setUser(player);
-    localStorage.setItem('stack_city_user', JSON.stringify(player));
     setShowAuth(false);
-    setShowOnboarding(false); // If logging in from start screen
-    showNotification(`Welcome back, ${player.name}`);
+
+    const { data: remoteBuildings } = await supabase
+      .from('buildings')
+      .select('*')
+      .eq('owner_id', player.id);
+
+    if (remoteBuildings && remoteBuildings.length > 0) {
+      showNotification(`Welcome back, ${player.name}! Cloud data synced.`);
+    }
   };
 
   const handleExitGame = () => {
-    setView(ViewState.CITY);
-    setShowOnboarding(true); // Return to main menu
+    window.close();
+    showNotification("Exiting game...");
   };
 
+  const handleRenameBuilding = async (lotIndex: number, newName: string) => {
+    setBuildings(prev => {
+      return prev.map(b => b.lotIndex === lotIndex ? { ...b, customName: newName } : b);
+    });
+
+    const { error } = await supabase
+      .from('buildings')
+      .update({ custom_name: newName })
+      .eq('lot_index', lotIndex)
+      .eq('city_id', cityTheme === 'CYBER' ? 'A' : 'B');
+
+    if (error) console.error("Rename failed:", error);
+    else showNotification("Building renamed!");
+  };
+
+  const handleRebuildLot = (lotIndex: number) => {
+    const existing = buildings.find(b => b.lotIndex === lotIndex);
+    if (existing) {
+      setSelectedLot(lotIndex);
+      setShowPlateSelection(true);
+      setShowSidebar(false);
+    }
+  };
+
+  const isGuest = user?.id.startsWith('guest_');
+
   return (
-    <div className={`w-full h-screen relative overflow-hidden font-sans transition-colors duration-700 ${cityTheme === 'ISO' ? 'bg-sky-200' : 'bg-slate-900'}`}>
-
-      <AuthModal
-        isOpen={showAuth}
-        onClose={() => setShowAuth(false)}
-        onAuthenticated={handleAuthenticated}
-        currentGuest={user || undefined}
-      />
-
-      {/* Online Count Badge */}
-      <div className="absolute top-6 left-6 z-50 bg-black/40 backdrop-blur-md rounded-full px-4 py-2 flex items-center gap-2 border border-white/10 shadow-lg pointer-events-none">
-        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse relative">
-          <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></div>
-        </div>
-        <span className="text-xs font-bold font-mono text-white/90">● {onlineCount} ONLINE NOW</span>
-      </div>
-
-      <div className={`w-full h-full transition-all duration-700 ${showOnboarding ? 'blur-md scale-105 brightness-50' : ''}`}>
-        {/* Background Elements managed by conditional rendering below, but we wrap the main game loop here if possible? 
-             Actually, the Notification and Modals shouldn't be blurred. The Game view (Map) should be. 
-             So let's blur the inner content. */}
-
-        {view === ViewState.CITY && user && (
+    <div className="w-screen h-screen overflow-hidden bg-slate-950 text-slate-200 font-sans select-none">
+      {/* City Status Bar & Main Overlays */}
+      {view === ViewState.CITY && (
+        <>
           <CityMap
             buildings={buildings}
             cityLayout={cityLayout}
             gridSize={GRID_SIZE}
             onLotSelect={handleLotSelect}
-            user={user}
+            user={user || { id: 'spectator', name: 'Spectator', color: '#64748b', company: 'Observer', logoId: 'zap', unlockedPlates: [] }}
             districts={DISTRICTS}
             focusedLotIndex={focusedLotIndex}
             theme={cityTheme}
+            onlineCount={onlineCount}
+            showMinimap={showMinimap}
+            setShowMinimap={setShowMinimap}
+            worldNotifications={worldNotifications}
           />
-        )}
-      </div>
 
-      {/* Onboarding Overlay - Outside the blur */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        initialCity={cityTheme}
-        onCitySelect={(city) => setCityTheme(city)}
-        cityCounts={cityCounts}
-      />
+          <div className="absolute top-6 right-6 z-40 flex flex-col gap-3">
+            <button onClick={() => setShowProfile(true)} className="w-12 h-12 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-xl group">
+              <UserCircle size={24} className="group-hover:scale-110 transition-transform" />
+            </button>
 
-      {/* City Full Modal */}
-      {cityFull && (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 p-8 rounded-2xl border-2 border-yellow-500 shadow-2xl max-w-md text-center space-y-6">
-            <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto animate-bounce">
-              <AlertTriangle className="text-yellow-500" size={40} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-white mb-2">SECTOR CAPACITY REACHED</h2>
-              <p className="text-slate-400">This city grid has reached its 6-player architect limit. Protocol requires relocation to an adjacent sector.</p>
-            </div>
-            <button
-              onClick={handleTravelCity}
-              className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase rounded-xl shadow-lg shadow-yellow-500/20 flex items-center justify-center gap-2 transition"
-            >
-              <Plane size={20} /> Travel to Sector {cityTheme === 'CYBER' ? 'B' : 'A'}
+            <button onClick={() => setShowLeaderboard(!showLeaderboard)} className={`w-12 h-12 rounded-2xl backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all shadow-xl group ${showLeaderboard ? 'bg-indigo-500 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-800'}`}>
+              <Trophy size={22} className="group-hover:rotate-12 transition-transform" />
+            </button>
+
+            <button onClick={() => setShowAchievements(!showAchievements)} className={`w-12 h-12 rounded-2xl backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all shadow-xl group ${showAchievements ? 'bg-indigo-500 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-800'}`}>
+              <Medal size={22} className="group-hover:scale-110 transition-transform" />
+            </button>
+
+            <button onClick={() => setShowMinimap(!showMinimap)} className={`w-12 h-12 rounded-2xl backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all shadow-xl group ${showMinimap ? 'bg-indigo-500 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-800'}`}>
+              <MapIcon size={22} className="group-hover:scale-110 transition-transform" />
+            </button>
+
+            <button onClick={handleTravelCity} className="w-12 h-12 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-xl group">
+              <Globe size={22} className="group-hover:animate-spin-slow" />
+            </button>
+
+            <button onClick={shareEmpire} className="w-12 h-12 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-xl group">
+              <Share2 size={20} />
+            </button>
+
+            <div className="h-px w-8 bg-white/10 mx-auto my-1" />
+
+            {isGuest ? (
+              <button onClick={() => setShowAuth(true)} className="w-12 h-12 rounded-2xl bg-indigo-600 backdrop-blur-xl border border-indigo-400/50 flex items-center justify-center text-white hover:bg-indigo-500 transition-all shadow-xl group">
+                <LogIn size={20} />
+              </button>
+            ) : (
+              <button onClick={handleLogout} className="w-12 h-12 rounded-2xl bg-red-500/80 backdrop-blur-xl border border-red-400/50 flex items-center justify-center text-white hover:bg-red-600 transition-all shadow-xl group">
+                <LogOut size={20} />
+              </button>
+            )}
+
+            <button onClick={handleExitGame} className="w-12 h-12 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-xl group">
+              <DoorOpen size={20} className="text-red-400" />
             </button>
           </div>
-        </div>
-      )}
 
-      {notification && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in pointer-events-none">
-          <Zap className="text-yellow-400 fill-yellow-400" size={16} />
-          <span className="font-bold text-sm text-white">{notification}</span>
-        </div>
-      )}
+          <button
+            onClick={() => setShowSidebar(true)}
+            className="absolute bottom-8 right-8 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-wider shadow-[0_15px_30px_-10px_rgba(79,70,229,0.5)] flex items-center gap-3 active:scale-95 transition-all"
+          >
+            <Menu size={20} /> My Empire
+          </button>
 
-      {showProfile && user && (
-        <UserProfile user={user} onUpdate={setUser} onClose={() => setShowProfile(false)} />
-      )}
+          <Leaderboard isOpen={showLeaderboard} buildings={buildings} onToggle={() => setShowLeaderboard(!showLeaderboard)} />
 
-      {/* Main UI Overlays - Only show if NOT onboarding */}
-      {!showOnboarding && view === ViewState.CITY && user && (
-        <>
-          {showPlateSelection && (
+          <Sidebar
+            user={user || { id: 'spectator', name: 'Spectator', color: '#64748b', company: 'Observer', logoId: 'zap', unlockedPlates: [] }}
+            buildings={buildings}
+            onFocusBuilding={handleFocusBuilding}
+            onRenameBuilding={handleRenameBuilding}
+            onRebuildLot={handleRebuildLot}
+            isOpen={showSidebar}
+            onToggle={() => setShowSidebar(!showSidebar)}
+          />
+
+          {showProfile && user && (
+            <UserProfile user={user} onClose={() => setShowProfile(false)} onUpdate={handleOnboardingComplete} />
+          )}
+
+          {showAchievements && (
+            <AchievementsModal achievements={achievements} onClose={() => setShowAchievements(false)} />
+          )}
+
+          {showPlateSelection && user && (
             <PlateSelectionModal
               user={user}
               credits={credits}
@@ -719,92 +795,24 @@ export default function App() {
             />
           )}
 
-          {/* Top Right Controls */}
-          <div className="absolute top-6 right-6 z-20 flex flex-col gap-3">
-            {/* Exit Game Button (Door) */}
-            <button onClick={handleExitGame} className="bg-red-500/80 p-3 rounded-full hover:bg-red-500 border border-red-400 shadow-lg text-white group relative">
-              <LogOut size={24} />
-              <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">Exit / Main Menu</span>
-            </button>
-
-            <button onClick={() => setShowSidebar(!showSidebar)} className="bg-slate-800 p-3 rounded-full hover:bg-slate-700 border border-slate-700 shadow-lg text-white group relative">
-              <Menu size={24} />
-              <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">My Empire</span>
-            </button>
-            <button onClick={() => setShowLeaderboard(!showLeaderboard)} className="bg-slate-800 p-3 rounded-full hover:bg-slate-700 border border-slate-700 shadow-lg text-white group relative">
-              <Trophy size={24} className={showLeaderboard ? "text-yellow-400" : "text-white"} />
-              <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">Ranking</span>
-            </button>
-            <button onClick={shareEmpire} className="bg-slate-800 p-3 rounded-full hover:bg-slate-700 border border-slate-700 shadow-lg text-white group relative">
-              <Share2 size={24} className="text-blue-400" />
-              <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">Share Game</span>
-            </button>
-          </div>
-
-          {/* Right Side Stack: Plane + Profile */}
-          <div className="absolute bottom-1/2 right-6 translate-y-1/2 z-20 flex flex-col gap-4 items-center">
-            <button
-              onClick={toggleCityTheme}
-              className={`group relative flex items-center justify-center p-4 rounded-2xl shadow-2xl transition-all duration-300 border-4
-                    ${cityTheme === 'ISO'
-                  ? 'bg-indigo-600 border-white hover:bg-indigo-700'
-                  : 'bg-emerald-400 border-emerald-200 hover:bg-emerald-500'}`}
-            >
-              <div className="absolute right-full mr-4 bg-black/80 text-white text-xs font-bold px-3 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
-                {cityTheme === 'CYBER' ? 'Go to Sunnyside' : 'Go to Cyber City'}
-              </div>
-              {cityTheme === 'CYBER' ? (
-                <Plane size={32} className="text-slate-900 rotate-[-45deg]" />
-              ) : (
-                <Globe size={32} className="text-white" />
-              )}
-            </button>
-
-            {/* Profile Button - Moved Here */}
-            <button
-              onClick={() => setShowProfile(true)}
-              className="w-12 h-12 rounded-full border-2 border-slate-600 bg-slate-800 hover:border-white shadow-xl flex items-center justify-center group relative transition overflow-hidden"
-            >
-              <UserCircle size={28} style={{ color: user.color }} />
-              <span className="absolute right-full mr-4 bg-black/80 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
-                Operative Profile
-              </span>
-            </button>
-          </div>
-
-          <Sidebar
-            isOpen={showSidebar}
-            onToggle={() => setShowSidebar(!showSidebar)}
-            user={user}
-            buildings={buildings}
-            onFocusBuilding={handleFocusBuilding}
-            onLogout={handleLogout}
-            onLogin={() => setShowAuth(true)}
-          />
-
-          <Leaderboard
-            isOpen={showLeaderboard}
-            onToggle={() => setShowLeaderboard(!showLeaderboard)}
-            buildings={buildings}
-          />
-
-          {/* City Map Rendered in Background Layer now */}
+          {showAuth && (
+            <AuthModal isOpen={showAuth} onAuthenticated={handleAuthenticated} onClose={() => setShowAuth(false)} currentGuest={user!} />
+          )}
         </>
       )}
 
       {view === ViewState.GAME && selectedLot !== null && user && (
         <Game
           lotIndex={selectedLot}
-          bestScore={Math.max(0, ...(buildings.find(b => b.lotIndex === selectedLot)?.score ? [buildings.find(b => b.lotIndex === selectedLot)!.score] : []))}
+          bestScore={buildings.find(b => b.lotIndex === selectedLot)?.score || 0}
           credits={credits}
           setCredits={setCredits}
-          onExit={handleBackToCity}
+          onExit={() => setView(ViewState.CITY)}
           onComplete={handleGameEnd}
           userColor={user.color}
           userName={user.name}
           theme={cityTheme}
           plateType={selectedPlate}
-          logoId={user.logoId}
         />
       )}
 
@@ -812,16 +820,35 @@ export default function App() {
         <BuildingInfo
           building={selectedBuilding}
           currentUser={user}
-          onBack={handleBackToCity}
+          onBack={() => { setView(ViewState.CITY); setSelectedBuilding(null); }}
           onReplay={handleReplayFromInfo}
         />
       )}
+
+      {/* Persistence Notifications */}
+      {notification && (
+        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[200] bg-slate-900/90 backdrop-blur-md border border-white/10 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-6 fade-in duration-300">
+          <Zap className="text-yellow-400" size={18} fill="currentColor" />
+          <span className="text-sm font-bold tracking-tight uppercase">{notification}</span>
+        </div>
+      )}
+
+      {showOnboarding && (
+        <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} cityCounts={cityCounts} />
+      )}
+
+      {cityFull && view === ViewState.CITY && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+          <div className="max-w-md text-center bg-slate-900 p-8 rounded-3xl border border-red-500/30 shadow-2xl">
+            <AlertTriangle className="mx-auto mb-6 text-red-500" size={64} />
+            <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">SECTOR OVERLOAD</h2>
+            <p className="text-slate-400 mb-8 font-medium">This city sector is currently at maximum capacity (6 players). Travel to an alternate dimension or wait for a slot to open.</p>
+            <button onClick={handleTravelCity} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-3">
+              <Globe size={20} /> TELEPORT TO ALTERNATE SECTOR
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
-
-  function handleBackToCity() {
-    setView(ViewState.CITY);
-    setSelectedBuilding(null);
-    setSelectedLot(null);
-  }
 }
