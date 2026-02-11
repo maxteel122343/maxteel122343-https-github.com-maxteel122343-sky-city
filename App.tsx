@@ -8,7 +8,8 @@ import Sidebar from './components/Sidebar';
 import Leaderboard from './components/Leaderboard';
 import UserProfile from './components/UserProfile';
 import OnboardingModal from './components/OnboardingModal';
-import { Trophy, Zap, Map as MapIcon, Users, Menu, UserCircle, Globe, Plane, Share2, Lock, Unlock, Hammer, AlertTriangle } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import { Trophy, Zap, Map as MapIcon, Users, Menu, UserCircle, Globe, Plane, Share2, Lock, Unlock, Hammer, AlertTriangle, LogOut, LogIn } from 'lucide-react';
 import { supabase } from './lib/supabaseClient';
 
 const GRID_SIZE = 6;
@@ -152,6 +153,7 @@ export default function App() {
   const [focusedLotIndex, setFocusedLotIndex] = useState<number | null>(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [cityFull, setCityFull] = useState(false);
 
   const [notification, setNotification] = useState<string | null>(null);
@@ -604,8 +606,37 @@ export default function App() {
     showNotification("Traveled to new city sector!");
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('stack_city_user');
+    setUser(null);
+    setShowOnboarding(true);  // Back to start
+    setShowSidebar(false);
+    showNotification("Logged out successfully.");
+  };
+
+  const handleAuthenticated = (player: Player) => {
+    setUser(player);
+    localStorage.setItem('stack_city_user', JSON.stringify(player));
+    setShowAuth(false);
+    setShowOnboarding(false); // If logging in from start screen
+    showNotification(`Welcome back, ${player.name}`);
+  };
+
+  const handleExitGame = () => {
+    setView(ViewState.CITY);
+    setShowOnboarding(true); // Return to main menu
+  };
+
   return (
     <div className={`w-full h-screen relative overflow-hidden font-sans transition-colors duration-700 ${cityTheme === 'ISO' ? 'bg-sky-200' : 'bg-slate-900'}`}>
+
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        onAuthenticated={handleAuthenticated}
+        currentGuest={user || undefined}
+      />
 
       {/* Online Count Badge */}
       <div className="absolute top-6 left-6 z-50 bg-black/40 backdrop-blur-md rounded-full px-4 py-2 flex items-center gap-2 border border-white/10 shadow-lg pointer-events-none">
@@ -688,8 +719,14 @@ export default function App() {
             />
           )}
 
-          {/* Top Right Controls - Removed Profile from here */}
+          {/* Top Right Controls */}
           <div className="absolute top-6 right-6 z-20 flex flex-col gap-3">
+            {/* Exit Game Button (Door) */}
+            <button onClick={handleExitGame} className="bg-red-500/80 p-3 rounded-full hover:bg-red-500 border border-red-400 shadow-lg text-white group relative">
+              <LogOut size={24} />
+              <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">Exit / Main Menu</span>
+            </button>
+
             <button onClick={() => setShowSidebar(!showSidebar)} className="bg-slate-800 p-3 rounded-full hover:bg-slate-700 border border-slate-700 shadow-lg text-white group relative">
               <Menu size={24} />
               <span className="absolute right-full mr-2 bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition whitespace-nowrap">My Empire</span>
@@ -741,6 +778,8 @@ export default function App() {
             user={user}
             buildings={buildings}
             onFocusBuilding={handleFocusBuilding}
+            onLogout={handleLogout}
+            onLogin={() => setShowAuth(true)}
           />
 
           <Leaderboard
