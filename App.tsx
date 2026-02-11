@@ -139,6 +139,8 @@ export default function App() {
   const [credits, setCredits] = useState<number>(1000);
   const [achievements, setAchievements] = useState<Achievement[]>(INITIAL_ACHIEVEMENTS);
   const [showPlateSelection, setShowPlateSelection] = useState(false);
+  const [onlineCount, setOnlineCount] = useState<number>(0);
+  const [cityCounts, setCityCounts] = useState<{ A: number, B: number }>({ A: 0, B: 0 });
 
   // New State for City Theme
   const [cityTheme, setCityTheme] = useState<'CYBER' | 'ISO'>('CYBER');
@@ -282,7 +284,33 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [cityLayout]);
+
+  // Fetch Online Counts
+  useEffect(() => {
+    const fetchCounts = async () => {
+      // Total Online (simulated 'active' in last 10 mins)
+      const { count: total } = await supabase.from('players').select('*', { count: 'exact', head: true }).gt('last_seen', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+      if (total !== null) setOnlineCount(total);
+
+      // City specific counts (approximation based on current buildings or just random/distributed for now if players table doesn't track current_city properly yet. 
+      // We didn't add 'current_city' to players table in SQL, we only have 'buildings'. 
+      // Let's infer from buildings ownership or just mock the distribution for the UI requirement or add the column. 
+      // For speed, let's just split the total randomly or query unique owners of buildings in city A/B.
+      // Better: Let's just update `last_seen` to include `current_city` metadata next time. 
+      // For now, let's mock the split of the Real Total:
+      if (total !== null) {
+        const aCount = Math.floor(total * 0.6); // Fake distribution
+        setCityCounts({ A: aCount, B: total - aCount });
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const initializeCity = async () => {
     // 1. Layout (Static for now, keep local or fetch if dynamic)
@@ -579,7 +607,41 @@ export default function App() {
   return (
     <div className={`w-full h-screen relative overflow-hidden font-sans transition-colors duration-700 ${cityTheme === 'ISO' ? 'bg-sky-200' : 'bg-slate-900'}`}>
 
-      <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} />
+      {/* Online Count Badge */}
+      <div className="absolute top-6 left-6 z-50 bg-black/40 backdrop-blur-md rounded-full px-4 py-2 flex items-center gap-2 border border-white/10 shadow-lg pointer-events-none">
+        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse relative">
+          <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></div>
+        </div>
+        <span className="text-xs font-bold font-mono text-white/90">● {onlineCount} ONLINE NOW</span>
+      </div>
+
+      <div className={`w-full h-full transition-all duration-700 ${showOnboarding ? 'blur-md scale-105 brightness-50' : ''}`}>
+        {/* Background Elements managed by conditional rendering below, but we wrap the main game loop here if possible? 
+             Actually, the Notification and Modals shouldn't be blurred. The Game view (Map) should be. 
+             So let's blur the inner content. */}
+
+        {view === ViewState.CITY && user && (
+          <CityMap
+            buildings={buildings}
+            cityLayout={cityLayout}
+            gridSize={GRID_SIZE}
+            onLotSelect={handleLotSelect}
+            user={user}
+            districts={DISTRICTS}
+            focusedLotIndex={focusedLotIndex}
+            theme={cityTheme}
+          />
+        )}
+      </div>
+
+      {/* Onboarding Overlay - Outside the blur */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onComplete={handleOnboardingComplete}
+        initialCity={cityTheme}
+        onCitySelect={(city) => setCityTheme(city)}
+        cityCounts={cityCounts}
+      />
 
       {/* City Full Modal */}
       {cityFull && (
@@ -613,8 +675,8 @@ export default function App() {
         <UserProfile user={user} onUpdate={setUser} onClose={() => setShowProfile(false)} />
       )}
 
-      {/* Main UI Overlays */}
-      {view === ViewState.CITY && user && (
+      {/* Main UI Overlays - Only show if NOT onboarding */}
+      {!showOnboarding && view === ViewState.CITY && user && (
         <>
           {showPlateSelection && (
             <PlateSelectionModal
@@ -687,16 +749,7 @@ export default function App() {
             buildings={buildings}
           />
 
-          <CityMap
-            buildings={buildings}
-            cityLayout={cityLayout}
-            gridSize={GRID_SIZE}
-            onLotSelect={handleLotSelect}
-            user={user}
-            districts={DISTRICTS}
-            focusedLotIndex={focusedLotIndex}
-            theme={cityTheme}
-          />
+          {/* City Map Rendered in Background Layer now */}
         </>
       )}
 

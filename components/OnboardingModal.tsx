@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { User, Dices, ChevronRight, Check, Rocket, Briefcase, Palette } from 'lucide-react';
+import { User, Dices, ChevronRight, Check, Rocket, Briefcase, Palette, Play, Map as MapIcon, Globe, Plane } from 'lucide-react';
 import { Player } from '../types';
 
 interface OnboardingModalProps {
     onComplete: (player: Player) => void;
     isOpen: boolean;
+    initialCity?: 'CYBER' | 'ISO';
+    onCitySelect?: (city: 'CYBER' | 'ISO') => void;
+    cityCounts?: { A: number, B: number };
 }
 
 const AVATAR_OPTIONS = [
@@ -18,8 +21,7 @@ const COLOR_OPTIONS = [
 
 const LOGO_ICONS = ['zap', 'crown', 'star', 'shield', 'sword', 'anchor', 'heart', 'droplet', 'sun', 'moon', 'cloud', 'camera', 'music', 'code'];
 
-export default function OnboardingModal({ onComplete, isOpen }: OnboardingModalProps) {
-    const [step, setStep] = useState(0);
+export default function OnboardingModal({ onComplete, isOpen, initialCity = 'CYBER', onCitySelect, cityCounts = { A: 0, B: 0 } }: OnboardingModalProps) {
     const [name, setName] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [avatarId, setAvatarId] = useState('pixel-1');
@@ -27,14 +29,23 @@ export default function OnboardingModal({ onComplete, isOpen }: OnboardingModalP
     const [logoId, setLogoId] = useState('zap');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // UI State for Editing
+    const [isEditing, setIsEditing] = useState(false);
+
     // Generate random initial values
     useEffect(() => {
         if (isOpen) {
-            setName(`Player_${Math.floor(Math.random() * 9999)}`);
-            setCompanyName(`Corp_${Math.floor(Math.random() * 999)}`);
-            setColor(COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)]);
+            randomizeAll();
         }
     }, [isOpen]);
+
+    const randomizeAll = () => {
+        setName(`Architect_${Math.floor(Math.random() * 9999)}`);
+        setCompanyName(`Corp_${Math.floor(Math.random() * 999)}`);
+        setColor(COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)]);
+        setAvatarId(AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)]);
+        setLogoId(LOGO_ICONS[Math.floor(Math.random() * LOGO_ICONS.length)]);
+    };
 
     const handleRandomLogo = () => {
         const random = LOGO_ICONS[Math.floor(Math.random() * LOGO_ICONS.length)];
@@ -43,10 +54,7 @@ export default function OnboardingModal({ onComplete, isOpen }: OnboardingModalP
 
     const handleComplete = () => {
         if (!name || !companyName) return;
-
         setIsSubmitting(true);
-
-        // Simulate API call / processing
         setTimeout(() => {
             const newPlayer: Player = {
                 id: `user_${Date.now()}`,
@@ -55,185 +63,129 @@ export default function OnboardingModal({ onComplete, isOpen }: OnboardingModalP
                 color,
                 logoId,
                 unlockedPlates: ['N1'],
-                // avatarId would be added here if defined in types
+                avatarId
             };
             onComplete(newPlayer);
             setIsSubmitting(false);
-        }, 800);
+        }, 500);
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4">
+            {/* Main Card */}
+            <div className="w-full max-w-md bg-slate-900 border-2 border-slate-700 rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in zoom-in-95 duration-300 mb-6">
 
-                {/* Progress Bar */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-slate-800">
-                    <div
-                        className="h-full bg-blue-500 transition-all duration-500"
-                        style={{ width: step === 0 ? '50%' : '100%' }}
-                    />
-                </div>
+                <div className="p-6 bg-gradient-to-br from-slate-800 to-slate-900 border-b border-slate-700 text-center relative">
+                    {/* Edit Toggle */}
+                    <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="absolute top-4 right-4 text-xs text-slate-400 hover:text-white underline"
+                    >
+                        {isEditing ? "Done" : "Edit Profile"}
+                    </button>
+                    <button
+                        onClick={randomizeAll}
+                        className="absolute top-4 left-4 text-xs text-slate-400 hover:text-white flex items-center gap-1"
+                    >
+                        <Dices size={12} /> Random
+                    </button>
 
-                <div className="p-8 flex flex-col gap-6">
-                    <div className="text-center space-y-2">
-                        <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                            <Rocket className="text-blue-400" size={32} />
+                    <div className="w-20 h-20 mx-auto rounded-full p-1 border-4 border-slate-700 shadow-xl mb-3 relative group overflow-hidden" style={{ borderColor: color }}>
+                        <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center overflow-hidden">
+                            {/* Avatar Render */}
+                            <div className="w-full h-full" style={{ backgroundColor: color, opacity: 0.8 }} />
+                            <div className="absolute inset-0 flex items-center justify-center text-white/20 font-black text-4xl">
+                                {name.charAt(0)}
+                            </div>
                         </div>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-wider">
-                            {step === 0 ? "Identify Yourself" : "Establish Company"}
-                        </h2>
-                        <p className="text-slate-400 text-sm">
-                            {step === 0 ? "Enter the digital frontier." : "Build your corporate identity."}
-                        </p>
                     </div>
 
-                    {step === 0 && (
-                        <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                    <User size={14} /> Agent Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none transition font-mono shadow-inner"
-                                    placeholder="Enter your name..."
-                                />
+                    {!isEditing ? (
+                        <>
+                            <h2 className="text-2xl font-black text-white">{name}</h2>
+                            <div className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-2 mt-1">
+                                <Briefcase size={12} /> {companyName}
                             </div>
-
-                            <div className="space-y-3">
-                                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                    Avatar Appearance
-                                </label>
-                                <div className="grid grid-cols-6 gap-2">
-                                    {AVATAR_OPTIONS.map((opt, i) => (
-                                        <button
-                                            key={opt}
-                                            onClick={() => setAvatarId(opt)}
-                                            className={`aspect-square rounded-lg border-2 transition-all overflow-hidden relative group
-                                        ${avatarId === opt
-                                                    ? 'border-blue-500 bg-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)] scale-110 z-10'
-                                                    : 'border-slate-700 bg-slate-800 hover:border-slate-500 opacity-70 hover:opacity-100'}`}
-                                        >
-                                            {/* Placeholder for SVG Avatar - using colored blocks for now based on index */}
-                                            <div
-                                                className="w-full h-full"
-                                                style={{
-                                                    backgroundColor: `hsl(${i * 60}, 70%, 60%)`,
-                                                    opacity: 0.8
-                                                }}
-                                            />
-                                            {avatarId === opt && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                    <Check size={16} className="text-white drop-shadow-md" />
-                                                </div>
-                                            )}
-                                        </button>
+                        </>
+                    ) : (
+                        <div className="space-y-3 mt-4 text-left">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Name</label>
+                                <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-black/30 border border-slate-600 rounded px-2 py-1 text-white text-sm" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Company</label>
+                                <input value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full bg-black/30 border border-slate-600 rounded px-2 py-1 text-white text-sm" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Brand Color</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {COLOR_OPTIONS.map(c => (
+                                        <button key={c} onClick={() => setColor(c)} className={`w-5 h-5 rounded-full ${color === c ? 'ring-2 ring-white' : ''}`} style={{ backgroundColor: c }} />
                                     ))}
                                 </div>
                             </div>
-
-                            <button
-                                onClick={() => { if (name) setStep(1); }}
-                                disabled={!name}
-                                className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all mt-4
-                            ${name
-                                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 translate-y-0'
-                                        : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}
-                            >
-                                Next Step <ChevronRight size={18} />
-                            </button>
                         </div>
                     )}
-
-                    {step === 1 && (
-                        <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                    <Briefcase size={14} /> Company Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={companyName}
-                                    onChange={(e) => setCompanyName(e.target.value)}
-                                    className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none transition font-mono shadow-inner"
-                                    placeholder="Enter company name..."
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                    <Palette size={14} /> Brand Identity
-                                </label>
-                                <div className="p-4 bg-slate-800 rounded-xl border border-slate-700 flex flex-col gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-sm text-slate-400">Primary Color</div>
-                                        <div className="flex gap-2">
-                                            {COLOR_OPTIONS.slice(0, 5).map(c => (
-                                                <button
-                                                    key={c}
-                                                    onClick={() => setColor(c)}
-                                                    className={`w-6 h-6 rounded-full border-2 transition-transform ${color === c ? 'border-white scale-125' : 'border-transparent hover:scale-110'}`}
-                                                    style={{ backgroundColor: c }}
-                                                />
-                                            ))}
-                                            {/* More colors could be a dropdown, keeping it simple */}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between border-t border-slate-700 pt-4">
-                                        <div className="text-sm text-slate-400">Create Logo</div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-inner bg-slate-900 border border-slate-700">
-                                                {/* Mock icon rendering */}
-                                                <div style={{ color }}>
-                                                    {/* We can't render dynamic Lucide icons easily here without a map, using generic for now unless passed */}
-                                                    <Dices size={20} />
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={handleRandomLogo}
-                                                className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2"
-                                            >
-                                                <Dices size={14} /> Randomize
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 mt-4">
-                                <button
-                                    onClick={() => setStep(0)}
-                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 py-4 rounded-xl font-bold transition"
-                                >
-                                    Back
-                                </button>
-                                <button
-                                    onClick={handleComplete}
-                                    disabled={!companyName || isSubmitting}
-                                    className={`flex-1 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                                ${companyName && !isSubmitting
-                                            ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-600/20'
-                                            : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}
-                                >
-                                    {isSubmitting ? (
-                                        <span className="animate-pulse">Creating...</span>
-                                    ) : (
-                                        <>Initialize System <Rocket size={18} /></>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="text-center text-xs text-slate-600">
-                        v0.9.2 • Stack City Protocol
-                    </div>
                 </div>
+
+                <div className="p-6 pt-4">
+                    <button
+                        onClick={handleComplete}
+                        disabled={isSubmitting}
+                        className="w-full py-5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-black text-xl uppercase tracking-wider rounded-2xl shadow-lg shadow-green-500/20 transform hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                    >
+                        {isSubmitting ? "Syncing..." : <>Play Now <Play fill="currentColor" /></>}
+                    </button>
+                    <p className="text-center text-xs text-slate-500 mt-3">Ready to build your legacy?</p>
+                </div>
+            </div>
+
+            {/* City Selection Cards */}
+            <div className="flex gap-4 w-full max-w-md">
+                {/* Cyber City Card */}
+                <button
+                    onClick={() => onCitySelect && onCitySelect('CYBER')}
+                    className={`flex-1 p-4 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group
+                        ${initialCity === 'CYBER'
+                            ? 'bg-slate-800 border-indigo-500 shadow-xl shadow-indigo-500/20 scale-105 z-10'
+                            : 'bg-slate-900 border-slate-700 hover:border-slate-500 opacity-60 hover:opacity-100'}`}
+                >
+                    <div className="flex flex-col items-center">
+                        <div className={`p-3 rounded-full mb-3 ${initialCity === 'CYBER' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                            <Plane size={24} className="rotate-[-45deg]" />
+                        </div>
+                        <h3 className="font-bold text-white text-sm uppercase">Cyber City</h3>
+                        <div className="text-xs text-indigo-400 font-mono mt-1">Sector A</div>
+                        <div className="mt-3 bg-black/40 rounded-full px-3 py-1 text-xs font-bold text-slate-300 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            {cityCounts.A} Players
+                        </div>
+                    </div>
+                </button>
+
+                {/* Sunnyside Card */}
+                <button
+                    onClick={() => onCitySelect && onCitySelect('ISO')}
+                    className={`flex-1 p-4 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group
+                         ${initialCity === 'ISO'
+                            ? 'bg-sky-900 border-emerald-400 shadow-xl shadow-emerald-400/20 scale-105 z-10'
+                            : 'bg-slate-900 border-slate-700 hover:border-slate-500 opacity-60 hover:opacity-100'}`}
+                >
+                    <div className="flex flex-col items-center">
+                        <div className={`p-3 rounded-full mb-3 ${initialCity === 'ISO' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                            <Globe size={24} />
+                        </div>
+                        <h3 className="font-bold text-white text-sm uppercase">Sunnyside</h3>
+                        <div className="text-xs text-emerald-400 font-mono mt-1">Sector B</div>
+                        <div className="mt-3 bg-black/40 rounded-full px-3 py-1 text-xs font-bold text-slate-300 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            {cityCounts.B} Players
+                        </div>
+                    </div>
+                </button>
             </div>
         </div>
     );
